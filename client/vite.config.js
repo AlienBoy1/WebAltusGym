@@ -56,6 +56,7 @@ export default defineConfig({
     })
   ],
   server: {
+    host: '0.0.0.0', // Escuchar en todas las interfaces
     port: 5173,
     proxy: {
       '/api': {

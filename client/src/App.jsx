@@ -19,6 +19,7 @@ import Social from './pages/user/Social'
 import Workouts from './pages/user/Workouts'
 import Progress from './pages/user/Progress'
 import Profile from './pages/user/Profile'
+import UserProfile from './pages/user/UserProfile'
 import Notifications from './pages/user/Notifications'
 import UserSettings from './pages/user/Settings'
 import Classes from './pages/user/Classes'
@@ -29,6 +30,7 @@ import Chat from './pages/user/Chat'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import Users from './pages/admin/Users'
 import Memberships from './pages/admin/Memberships'
+import Attendance from './pages/admin/Attendance'
 import Reports from './pages/admin/Reports'
 import Settings from './pages/admin/Settings'
 
@@ -94,6 +96,7 @@ function App() {
           <Route path="workouts" element={<Workouts />} />
           <Route path="progress" element={<Progress />} />
           <Route path="profile" element={<Profile />} />
+          <Route path="user/:id" element={<UserProfile />} />
           <Route path="notifications" element={<Notifications />} />
           <Route path="settings" element={<UserSettings />} />
           <Route path="classes" element={<Classes />} />
@@ -110,6 +113,7 @@ function App() {
           <Route index element={<AdminDashboard />} />
           <Route path="users" element={<Users />} />
           <Route path="memberships" element={<Memberships />} />
+          <Route path="attendance" element={<Attendance />} />
           <Route path="reports" element={<Reports />} />
           <Route path="settings" element={<Settings />} />
         </Route>

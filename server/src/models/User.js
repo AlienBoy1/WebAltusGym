@@ -49,7 +49,10 @@ const userSchema = new mongoose.Schema({
     longestStreak: { type: Number, default: 0 },
     level: { type: Number, default: 1 },
     xp: { type: Number, default: 0 },
-    totalCaloriesBurned: { type: Number, default: 0 }
+    totalCaloriesBurned: { type: Number, default: 0 },
+    classesCompleted: { type: Number, default: 0 },
+    challengesCompleted: { type: Number, default: 0 },
+    socialInteractions: { type: Number, default: 0 }
   },
   badges: [{
     id: String,
@@ -106,7 +109,12 @@ const userSchema = new mongoose.Schema({
   },
   social: {
     followers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-    following: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
+    following: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    followRequests: [{
+      user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      requestedAt: { type: Date, default: Date.now }
+    }],
+    pendingRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
   },
   twoFactorSecret: String,
   twoFactorEnabled: { type: Boolean, default: false },
@@ -117,6 +125,10 @@ const userSchema = new mongoose.Schema({
   passwordResetExpires: Date,
   lastLogin: Date,
   onboardingCompleted: { type: Boolean, default: false },
+  settings: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {}
+  },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 })

@@ -41,31 +41,104 @@ export default function UserSettings() {
   const [saving, setSaving] = useState(false)
   
   useEffect(() => {
-    const saved = localStorage.getItem(`settings_${user?._id}`)
-    if (saved) setSettings(JSON.parse(saved))
-  }, [user])
+    if (user?._id) {
+      loadSettings()
+    }
+  }, [user?._id])
   
-  useEffect(() => {
-    const theme = COLOR_THEMES.find(t => t.id === settings.colorTheme)
+  const loadSettings = async () => {
+    try {
+      // Try to load from backend first
+      const { data } = await api.get('/users/profile')
+      if (data?.settings) {
+        setSettings(data.settings)
+        applySettings(data.settings)
+        return
+      }
+    } catch (error) {
+      // Fallback to localStorage
+      const saved = localStorage.getItem(`settings_${user?._id}`)
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        setSettings(parsed)
+        applySettings(parsed)
+      }
+    }
+  }
+  
+  const applySettings = (settingsToApply) => {
+    // Apply color theme
+    const theme = COLOR_THEMES.find(t => t.id === settingsToApply.colorTheme)
     if (theme) {
       document.documentElement.style.setProperty('--color-primary', theme.primary)
       document.documentElement.style.setProperty('--color-accent', theme.accent)
     }
-  }, [settings.colorTheme])
+    
+    // Apply dark/light theme
+    if (settingsToApply.theme === 'light') {
+      document.documentElement.classList.remove('dark')
+      document.documentElement.classList.add('light')
+    } else if (settingsToApply.theme === 'dark') {
+      document.documentElement.classList.remove('light')
+      document.documentElement.classList.add('dark')
+    } else {
+      // System theme
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+      if (prefersDark) {
+        document.documentElement.classList.remove('light')
+        document.documentElement.classList.add('dark')
+      } else {
+        document.documentElement.classList.remove('dark')
+        document.documentElement.classList.add('light')
+      }
+    }
+    
+    // Apply font size
+    if (settingsToApply.accessibility?.fontSize) {
+      const fontSizeMap = { small: '14px', medium: '16px', large: '18px' }
+      document.documentElement.style.setProperty('--font-size-base', fontSizeMap[settingsToApply.accessibility.fontSize] || '16px')
+    }
+  }
+  
+  useEffect(() => {
+    applySettings(settings)
+  }, [settings.theme, settings.colorTheme, settings.accessibility?.fontSize])
   
   const updateSetting = (category, key, value) => {
     setSettings(prev => ({ ...prev, [category]: { ...prev[category], [key]: value } }))
   }
   
   const handleSave = async () => {
+    if (!user?._id) return
+    
     setSaving(true)
-    localStorage.setItem(`settings_${user?._id}`, JSON.stringify(settings))
     try {
+      // Save to backend
       await api.put('/users/profile', { settings })
-    } catch (e) {}
-    setSaving(false)
-    toast.success('Configuración guardada')
+      // Also save to localStorage as backup
+      localStorage.setItem(`settings_${user?._id}`, JSON.stringify(settings))
+      toast.success('Configuración guardada')
+    } catch (error) {
+      // Fallback to localStorage only
+      localStorage.setItem(`settings_${user?._id}`, JSON.stringify(settings))
+      toast.success('Configuración guardada localmente')
+    } finally {
+      setSaving(false)
+    }
   }
+  
+  // Auto-save on change (debounced)
+  useEffect(() => {
+    if (!user?._id) return
+    
+    const timeoutId = setTimeout(() => {
+      localStorage.setItem(`settings_${user?._id}`, JSON.stringify(settings))
+      // Auto-save to backend in background
+      api.put('/users/profile', { settings }).catch(() => {})
+    }, 1000)
+    
+    return () => clearTimeout(timeoutId)
+  }, [settings, user?._id])
   
   const handlePushToggle = async (enabled) => {
     if (enabled && 'Notification' in window) {

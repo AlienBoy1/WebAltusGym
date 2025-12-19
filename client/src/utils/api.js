@@ -1,7 +1,31 @@
 import axios from 'axios'
 
+// Detect if we're on mobile/local network or production
+const getApiURL = () => {
+  // If VITE_API_URL is set, use it (for production)
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL
+  }
+  
+  // Production mode - use environment variable or default
+  if (import.meta.env.PROD) {
+    return import.meta.env.VITE_API_URL || 'https://altus-gym-server.onrender.com/api'
+  }
+  
+  // Get current hostname
+  const hostname = window.location.hostname
+  
+  // If accessing from IP (not localhost), use that IP for API
+  if (hostname !== 'localhost' && hostname !== '127.0.0.1' && !hostname.includes('vercel.app')) {
+    return `http://${hostname}:3001/api`
+  }
+  
+  // Default to localhost for development
+  return 'http://localhost:3001/api'
+}
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3001/api',
+  baseURL: getApiURL(),
   headers: {
     'Content-Type': 'application/json'
   }

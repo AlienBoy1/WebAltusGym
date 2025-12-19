@@ -31,7 +31,8 @@ const classSchema = new mongoose.Schema({
   },
   enrolled: [{
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    enrolledAt: { type: Date, default: Date.now }
+    enrolledAt: { type: Date, default: Date.now },
+    completedAt: Date
   }],
   waitlist: [{
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },

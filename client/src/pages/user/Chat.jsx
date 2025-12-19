@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { FiSend, FiSearch, FiMoreVertical, FiArrowLeft, FiPlus, FiX } from 'react-icons/fi'
+import { Link } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
 import api from '../../utils/api'
 import { getSocket, showNotification, requestNotificationPermission } from '../../utils/socket'
@@ -18,6 +19,7 @@ export default function Chat() {
   const [searchResults, setSearchResults] = useState([])
   const [searching, setSearching] = useState(false)
   const [onlineUsers, setOnlineUsers] = useState(new Set())
+  const [userFilter, setUserFilter] = useState('all') // all, with_conversation, following, not_following
   const messagesEndRef = useRef(null)
   const selectedChatRef = useRef(null)
   
@@ -187,10 +189,10 @@ export default function Chat() {
   }
   
   const searchUsers = async () => {
-    if (!userSearch.trim()) return
     setSearching(true)
     try {
-      const { data } = await api.get(`/users/search?q=${userSearch}`)
+      const query = userSearch.trim() ? `q=${userSearch}&filter=${userFilter}` : `filter=${userFilter}`
+      const { data } = await api.get(`/users/search?${query}`)
       setSearchResults(data || [])
     } catch (error) {
       setSearchResults([])
@@ -198,6 +200,12 @@ export default function Chat() {
       setSearching(false)
     }
   }
+
+  useEffect(() => {
+    if (showNewChat) {
+      searchUsers()
+    }
+  }, [userFilter, showNewChat])
   
   const startConversation = (selectedUser) => {
     const existingConv = conversations.find(c => c.oderId === selectedUser._id)
@@ -253,13 +261,21 @@ export default function Chat() {
             filteredConversations.map((conv) => (
               <button key={conv.id} onClick={() => handleSelectChat(conv)}
                 className={`w-full flex items-center gap-3 p-4 hover:bg-dark-200 transition-colors ${selectedChat?.id === conv.id ? 'bg-dark-200' : ''}`}>
-                <div className="relative">
-                  <div className="w-12 h-12 rounded-full bg-dark-300 flex items-center justify-center text-2xl">{conv.avatar}</div>
+                <Link to={`/user/${conv.oderId}`} className="relative flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center text-2xl overflow-hidden">
+                    {conv.avatar?.startsWith('data:') || conv.avatar?.startsWith('http') ? (
+                      <img src={conv.avatar} alt={conv.name} className="w-full h-full object-cover rounded-full" />
+                    ) : (
+                      conv.avatar
+                    )}
+                  </div>
                   {isOnline(conv.oderId) && <div className="absolute bottom-0 right-0 w-3 h-3 bg-accent-green rounded-full border-2 border-dark-200" />}
-                </div>
+                </Link>
                 <div className="flex-1 text-left min-w-0">
                   <div className="flex items-center justify-between">
-                    <span className="font-medium">{conv.name}</span>
+                    <Link to={`/user/${conv.oderId}`} onClick={(e) => e.stopPropagation()} className="font-medium hover:text-primary-500 transition-colors">
+                      {conv.name}
+                    </Link>
                     <span className="text-xs text-gray-500">{conv.time}</span>
                   </div>
                   <div className="flex items-center justify-between">
@@ -278,16 +294,22 @@ export default function Chat() {
         <div className="flex-1 card p-0 flex flex-col overflow-hidden">
           <div className="p-4 border-b border-white/5 flex items-center gap-3">
             <button onClick={handleBack} className="md:hidden text-gray-400 hover:text-white"><FiArrowLeft size={20} /></button>
-            <div className="relative">
-              <div className="w-10 h-10 rounded-full bg-dark-300 flex items-center justify-center text-xl">{selectedChat.avatar}</div>
+            <Link to={`/user/${selectedChat.oderId}`} className="relative flex-shrink-0">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center text-xl overflow-hidden">
+                {selectedChat.avatar?.startsWith('data:') || selectedChat.avatar?.startsWith('http') ? (
+                  <img src={selectedChat.avatar} alt={selectedChat.name} className="w-full h-full object-cover rounded-full" />
+                ) : (
+                  selectedChat.avatar
+                )}
+              </div>
               {isOnline(selectedChat.oderId) && <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-accent-green rounded-full border-2 border-dark-200" />}
-            </div>
-            <div className="flex-1">
-              <div className="font-medium">{selectedChat.name}</div>
+            </Link>
+            <Link to={`/user/${selectedChat.oderId}`} className="flex-1">
+              <div className="font-medium hover:text-primary-500 transition-colors">{selectedChat.name}</div>
               <div className={`text-xs ${isOnline(selectedChat.oderId) ? 'text-accent-green' : 'text-gray-500'}`}>
                 {isOnline(selectedChat.oderId) ? 'En línea' : 'Desconectado'}
               </div>
-            </div>
+            </Link>
           </div>
           
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -327,24 +349,81 @@ export default function Chat() {
           <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="card max-w-md w-full">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-display text-xl">Nueva Conversación</h2>
-              <button onClick={() => { setShowNewChat(false); setSearchResults([]); setUserSearch('') }}><FiX size={24} /></button>
+              <button onClick={() => { setShowNewChat(false); setSearchResults([]); setUserSearch(''); setUserFilter('all') }}><FiX size={24} /></button>
             </div>
+
+            {/* Filters */}
+            <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
+              {[
+                { id: 'all', label: 'Todos' },
+                { id: 'with_conversation', label: 'Con conversación' },
+                { id: 'following', label: 'Siguiendo' },
+                { id: 'not_following', label: 'No siguiendo' }
+              ].map(filter => (
+                <button
+                  key={filter.id}
+                  onClick={() => setUserFilter(filter.id)}
+                  className={`px-3 py-1 rounded-lg text-sm whitespace-nowrap transition-colors ${
+                    userFilter === filter.id
+                      ? 'bg-primary-500 text-white'
+                      : 'bg-dark-200 text-gray-400 hover:text-white'
+                  }`}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+
             <div className="flex gap-2 mb-4">
-              <input type="text" value={userSearch} onChange={(e) => setUserSearch(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && searchUsers()} placeholder="Buscar usuario..." className="input-field flex-1" />
+              <input
+                type="text"
+                value={userSearch}
+                onChange={(e) => setUserSearch(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && searchUsers()}
+                placeholder="Buscar usuario..."
+                className="input-field flex-1"
+              />
               <button onClick={searchUsers} disabled={searching} className="btn-primary px-4">
                 {searching ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <FiSearch />}
               </button>
             </div>
             <div className="max-h-64 overflow-y-auto">
-              {searchResults.length === 0 ? (
-                <p className="text-gray-400 text-center py-4">{userSearch ? 'No se encontraron usuarios' : 'Busca un usuario'}</p>
+              {searching ? (
+                <div className="text-center py-8">
+                  <div className="w-6 h-6 border-2 border-dark-100 border-t-primary-500 rounded-full animate-spin mx-auto" />
+                </div>
+              ) : searchResults.length === 0 ? (
+                <p className="text-gray-400 text-center py-4">
+                  {userSearch ? 'No se encontraron usuarios' : 'Selecciona un filtro o busca un usuario'}
+                </p>
               ) : (
-                searchResults.map((u) => (
-                  <button key={u._id} onClick={() => startConversation(u)} className="w-full flex items-center gap-3 p-3 hover:bg-dark-200 rounded-xl">
-                    <div className="w-10 h-10 rounded-full bg-primary-500/20 flex items-center justify-center text-primary-500 font-medium">{u.name?.charAt(0)}</div>
-                    <div className="text-left"><div className="font-medium">{u.name}</div><div className="text-gray-400 text-sm">{u.email}</div></div>
-                  </button>
-                ))
+                searchResults.map((u) => {
+                  const getAvatarDisplay = () => {
+                    if (u.avatar) {
+                      if (u.avatar.startsWith('data:') || u.avatar.startsWith('http')) {
+                        return <img src={u.avatar} alt={u.name} className="w-full h-full object-cover rounded-full" />
+                      }
+                      return u.avatar
+                    }
+                    return u.name?.charAt(0) || '👤'
+                  }
+
+                  return (
+                    <button
+                      key={u._id}
+                      onClick={() => startConversation(u)}
+                      className="w-full flex items-center gap-3 p-3 hover:bg-dark-200 rounded-xl"
+                    >
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center text-primary-500 font-medium overflow-hidden">
+                        {getAvatarDisplay()}
+                      </div>
+                      <div className="text-left flex-1 min-w-0">
+                        <div className="font-medium truncate">{u.name}</div>
+                        <div className="text-gray-400 text-sm truncate">{u.email}</div>
+                      </div>
+                    </button>
+                  )
+                })
               )}
             </div>
           </motion.div>

@@ -1,11 +1,12 @@
 import { Outlet, NavLink, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { FiGrid, FiUsers, FiCreditCard, FiFileText, FiSettings, FiArrowLeft } from 'react-icons/fi'
+import { FiGrid, FiUsers, FiCreditCard, FiFileText, FiSettings, FiArrowLeft, FiClock } from 'react-icons/fi'
 
 const sidebarItems = [
   { path: '/admin', icon: FiGrid, label: 'Dashboard', exact: true },
   { path: '/admin/users', icon: FiUsers, label: 'Usuarios' },
   { path: '/admin/memberships', icon: FiCreditCard, label: 'Membresías' },
+  { path: '/admin/attendance', icon: FiClock, label: 'Asistencias' },
   { path: '/admin/reports', icon: FiFileText, label: 'Reportes' },
   { path: '/admin/settings', icon: FiSettings, label: 'Configuración' },
 ]

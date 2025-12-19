@@ -207,6 +207,71 @@ router.post('/:id/cancel', authenticate, isTrainerOrAdmin, async (req, res) => {
   }
 })
 
+// Mark class as completed (for enrolled users)
+router.post('/:id/complete', authenticate, async (req, res) => {
+  try {
+    const classItem = await Class.findById(req.params.id)
+    
+    if (!classItem) {
+      return res.status(404).json({ message: 'Clase no encontrada' })
+    }
+    
+    // Check if user is enrolled
+    const enrollment = classItem.enrolled.find(
+      e => e.user.toString() === req.user._id.toString()
+    )
+    
+    if (!enrollment) {
+      return res.status(400).json({ message: 'No estás inscrito en esta clase' })
+    }
+    
+    // Check if already completed today
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const tomorrow = new Date(today)
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    
+    if (enrollment.completedAt && new Date(enrollment.completedAt) >= today && new Date(enrollment.completedAt) < tomorrow) {
+      return res.status(400).json({ message: 'Ya completaste esta clase hoy' })
+    }
+    
+    // Mark as completed
+    enrollment.completedAt = new Date()
+    await classItem.save()
+    
+    // Update user stats
+    const user = await User.findById(req.user._id)
+    user.stats = user.stats || {}
+    user.stats.classesCompleted = (user.stats.classesCompleted || 0) + 1
+    await user.save()
+    
+    // Award XP using xpService (30 XP per class)
+    const { awardXP, checkBadgeUnlocks } = await import('../services/xpService.js')
+    let xpResult = null
+    let unlockedBadges = []
+    
+    try {
+      xpResult = await awardXP(req.user._id, 30, `Completaste la clase: ${classItem.name}`, false)
+      unlockedBadges = await checkBadgeUnlocks(req.user._id, false)
+    } catch (xpError) {
+      console.error('Error awarding XP:', xpError)
+    }
+    
+    // Refresh user to get updated stats
+    const updatedUser = await User.findById(req.user._id)
+    
+    res.json({
+      message: '¡Clase completada!',
+      xpAwarded: 30,
+      leveledUp: xpResult?.leveledUp || false,
+      unlockedBadges: unlockedBadges.map(b => ({ id: b.id, name: b.name, icon: b.icon })),
+      stats: updatedUser.stats
+    })
+  } catch (error) {
+    res.status(500).json({ message: 'Error al completar clase', error: error.message })
+  }
+})
+
 // Delete class
 router.delete('/:id', authenticate, isAdmin, async (req, res) => {
   try {

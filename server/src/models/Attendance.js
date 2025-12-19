@@ -15,7 +15,10 @@ const attendanceSchema = new mongoose.Schema({
   duration: Number // in minutes
 })
 
+// Indexes for optimized queries
 attendanceSchema.index({ user: 1, checkIn: -1 })
+attendanceSchema.index({ checkIn: -1 })
+attendanceSchema.index({ checkIn: 1, checkOut: 1 })
 
 export default mongoose.model('Attendance', attendanceSchema)
 

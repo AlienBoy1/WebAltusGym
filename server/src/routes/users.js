@@ -39,21 +39,39 @@ router.get('/stats', authenticate, async (req, res) => {
   }
 })
 
+// Get profile (with settings)
+router.get('/profile', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select('-password')
+    if (!user) {
+      return res.status(404).json({ message: 'Usuario no encontrado' })
+    }
+    res.json({ 
+      ...user.toObject(),
+      settings: user.settings || {}
+    })
+  } catch (error) {
+    res.status(500).json({ message: 'Error al obtener perfil', error: error.message })
+  }
+})
+
 // Update profile
 router.put('/profile', authenticate, async (req, res) => {
   try {
-    const { name, avatar, phone, emergencyContact, goals } = req.body
+    const { name, avatar, phone, emergencyContact, goals, settings } = req.body
+    
+    const updateData = {}
+    if (name) updateData.name = name
+    if (avatar !== undefined) updateData.avatar = avatar
+    if (phone !== undefined) updateData.phone = phone
+    if (emergencyContact !== undefined) updateData.emergencyContact = emergencyContact
+    if (goals !== undefined) updateData.goals = goals
+    if (settings !== undefined) updateData.settings = settings
+    updateData.updatedAt = new Date()
     
     const user = await User.findByIdAndUpdate(
       req.user._id,
-      { 
-        ...(name && { name }),
-        ...(avatar && { avatar }),
-        ...(phone && { phone }),
-        ...(emergencyContact && { emergencyContact }),
-        ...(goals && { goals }),
-        updatedAt: new Date()
-      },
+      updateData,
       { new: true }
     ).select('-password')
     
@@ -113,6 +131,28 @@ router.put('/:id/membership', authenticate, isAdmin, async (req, res) => {
   }
 })
 
+// Get available memberships
+router.get('/memberships', authenticate, async (req, res) => {
+  try {
+    const Membership = (await import('../models/Membership.js')).default
+    const memberships = await Membership.find({ active: true }).sort({ price: 1 })
+    res.json(memberships)
+  } catch (error) {
+    res.status(500).json({ message: 'Error al obtener membresías', error: error.message })
+  }
+})
+
+// Get all badge definitions
+router.get('/badges/definitions', authenticate, async (req, res) => {
+  try {
+    const { getBadgeDefinitions } = await import('../services/xpService.js')
+    const definitions = getBadgeDefinitions()
+    res.json(definitions)
+  } catch (error) {
+    res.status(500).json({ message: 'Error al obtener definiciones de insignias', error: error.message })
+  }
+})
+
 // Get user by ID
 router.get('/:id', authenticate, async (req, res) => {
   try {
@@ -150,33 +190,38 @@ router.get('/search', authenticate, async (req, res) => {
   try {
     const { q, filter } = req.query
     
-    if (!q) {
+    // Refresh user to get latest social data
+    const currentUser = await User.findById(req.user._id)
+    
+    if (!q || q.trim() === '') {
       // Return all users if no query, with optional filters
       let query = { _id: { $ne: req.user._id } }
       
       if (filter === 'with_conversation') {
-        // This would require checking Message model - for now return all
         const Message = (await import('../models/Message.js')).default
         const conversations = await Message.distinct('from', { to: req.user._id })
         const sentTo = await Message.distinct('to', { from: req.user._id })
-        const allConversationIds = [...new Set([...conversations, ...sentTo])]
+        const allConversationIds = [...new Set([...conversations.map(id => id.toString()), ...sentTo.map(id => id.toString())])]
         query._id = { $ne: req.user._id, $in: allConversationIds }
       } else if (filter === 'following') {
-        query._id = { $ne: req.user._id, $in: req.user.social?.following || [] }
+        const following = currentUser.social?.following || []
+        query._id = { $ne: req.user._id, $in: following.map(id => id.toString()) }
       } else if (filter === 'not_following') {
-        const following = req.user.social?.following || []
-        query._id = { $ne: req.user._id, $nin: following }
+        const following = currentUser.social?.following || []
+        query._id = { $ne: req.user._id, $nin: following.map(id => id.toString()) }
       }
       
       const users = await User.find(query).select('name email avatar').limit(50)
       return res.json(users)
     }
     
+    // Search with query
+    const searchTerm = q.trim()
     let query = {
       _id: { $ne: req.user._id },
       $or: [
-        { name: { $regex: q, $options: 'i' } },
-        { email: { $regex: q, $options: 'i' } }
+        { name: { $regex: searchTerm, $options: 'i' } },
+        { email: { $regex: searchTerm, $options: 'i' } }
       ]
     }
     
@@ -184,20 +229,43 @@ router.get('/search', authenticate, async (req, res) => {
       const Message = (await import('../models/Message.js')).default
       const conversations = await Message.distinct('from', { to: req.user._id })
       const sentTo = await Message.distinct('to', { from: req.user._id })
-      const allConversationIds = [...new Set([...conversations, ...sentTo])]
-      query._id = { $ne: req.user._id, $in: allConversationIds }
+      const allConversationIds = [...new Set([...conversations.map(id => id.toString()), ...sentTo.map(id => id.toString())])]
+      query._id = { 
+        $ne: req.user._id, 
+        $in: allConversationIds,
+        $or: [
+          { name: { $regex: searchTerm, $options: 'i' } },
+          { email: { $regex: searchTerm, $options: 'i' } }
+        ]
+      }
     } else if (filter === 'following') {
-      query._id = { $ne: req.user._id, $in: req.user.social?.following || [] }
+      const following = currentUser.social?.following || []
+      query._id = { 
+        $ne: req.user._id, 
+        $in: following.map(id => id.toString()),
+        $or: [
+          { name: { $regex: searchTerm, $options: 'i' } },
+          { email: { $regex: searchTerm, $options: 'i' } }
+        ]
+      }
     } else if (filter === 'not_following') {
-      const following = req.user.social?.following || []
-      query._id = { $ne: req.user._id, $nin: following }
+      const following = currentUser.social?.following || []
+      query._id = { 
+        $ne: req.user._id, 
+        $nin: following.map(id => id.toString()),
+        $or: [
+          { name: { $regex: searchTerm, $options: 'i' } },
+          { email: { $regex: searchTerm, $options: 'i' } }
+        ]
+      }
     }
     
-    const users = await User.find(query).select('name email avatar').limit(10)
+    const users = await User.find(query).select('name email avatar').limit(20)
     
     res.json(users)
   } catch (error) {
-    res.status(500).json({ message: 'Error', error: error.message })
+    console.error('Error searching users:', error)
+    res.status(500).json({ message: 'Error al buscar usuarios', error: error.message })
   }
 })
 

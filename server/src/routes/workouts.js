@@ -92,17 +92,12 @@ router.post('/', authenticate, async (req, res) => {
     
     await workout.save()
     
-    // Update user stats
+    // Update user stats using xpService
     const user = await User.findById(req.user._id)
     
     // Update total workouts
+    user.stats = user.stats || {}
     user.stats.totalWorkouts = (user.stats.totalWorkouts || 0) + 1
-    
-    // Update XP
-    user.stats.xp = (user.stats.xp || 0) + 50
-    
-    // Update level based on XP
-    user.stats.level = Math.floor((user.stats.xp || 0) / 100) + 1
     
     // Update streak
     const lastWorkout = await Workout.findOne({ 
@@ -124,9 +119,29 @@ router.post('/', authenticate, async (req, res) => {
     
     await user.save()
     
+    // Award XP using xpService (50 XP per workout)
+    const { awardXP, checkBadgeUnlocks } = await import('../services/xpService.js')
+    let xpResult = null
+    let unlockedBadges = []
+    
+    try {
+      xpResult = await awardXP(req.user._id, 50, `Completaste el entrenamiento: ${name}`, false)
+      
+      // Check for badge unlocks after XP is awarded
+      unlockedBadges = await checkBadgeUnlocks(req.user._id, false)
+    } catch (xpError) {
+      console.error('Error awarding XP:', xpError)
+    }
+    
+    // Refresh user to get updated stats
+    const updatedUser = await User.findById(req.user._id)
+    
     res.status(201).json({ 
       workout, 
-      stats: user.stats,
+      stats: updatedUser.stats,
+      xpAwarded: 50,
+      leveledUp: xpResult?.leveledUp || false,
+      unlockedBadges: unlockedBadges.map(b => ({ id: b.id, name: b.name, icon: b.icon })),
       message: '¡Entrenamiento registrado!' 
     })
   } catch (error) {
