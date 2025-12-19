@@ -13,6 +13,8 @@ import socialRoutes from './routes/social.js'
 import adminRoutes from './routes/admin.js'
 import notificationRoutes from './routes/notifications.js'
 import chatRoutes from './routes/chat.js'
+import classRoutes from './routes/classes.js'
+import challengeRoutes from './routes/challenges.js'
 
 dotenv.config()
 
@@ -43,6 +45,8 @@ app.use('/api/social', socialRoutes)
 app.use('/api/admin', adminRoutes)
 app.use('/api/notifications', notificationRoutes)
 app.use('/api/chat', chatRoutes)
+app.use('/api/classes', classRoutes)
+app.use('/api/challenges', challengeRoutes)
 
 // Health check
 app.get('/api/health', (req, res) => {

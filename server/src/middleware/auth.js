@@ -30,4 +30,11 @@ export const isAdmin = (req, res, next) => {
   next()
 }
 
-export default { authenticate, isAdmin }
+export const isTrainerOrAdmin = (req, res, next) => {
+  if (req.user?.role !== 'admin' && req.user?.role !== 'trainer') {
+    return res.status(403).json({ message: 'Acceso denegado. Se requiere rol de administrador o entrenador.' })
+  }
+  next()
+}
+
+export default { authenticate, isAdmin, isTrainerOrAdmin }

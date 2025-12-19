@@ -9,6 +9,8 @@ router.get('/feed', authenticate, async (req, res) => {
   try {
     const posts = await Post.find()
       .populate('user', 'name avatar stats')
+      .populate('sharedFrom', 'user content')
+      .populate('sharedFrom.user', 'name avatar')
       .sort({ createdAt: -1 })
       .limit(50)
     
@@ -88,6 +90,33 @@ router.post('/:id/comment', authenticate, async (req, res) => {
     res.json(post.comments)
   } catch (error) {
     res.status(500).json({ message: 'Error al comentar', error: error.message })
+  }
+})
+
+// Share post
+router.post('/:id/share', authenticate, async (req, res) => {
+  try {
+    const originalPost = await Post.findById(req.params.id)
+      .populate('user', 'name avatar')
+    
+    if (!originalPost) {
+      return res.status(404).json({ message: 'Publicación no encontrada' })
+    }
+    
+    const sharedPost = new Post({
+      user: req.user._id,
+      content: req.body.content || `Compartido de ${originalPost.user?.name || 'usuario'}`,
+      sharedFrom: originalPost._id
+    })
+    
+    await sharedPost.save()
+    await sharedPost.populate('user', 'name avatar stats')
+    await sharedPost.populate('sharedFrom', 'user content')
+    await sharedPost.populate('sharedFrom.user', 'name avatar')
+    
+    res.status(201).json(sharedPost)
+  } catch (error) {
+    res.status(500).json({ message: 'Error al compartir publicación', error: error.message })
   }
 })
 

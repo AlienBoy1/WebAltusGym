@@ -23,9 +23,12 @@ const postSchema = new mongoose.Schema({
     ref: 'User'
   }],
   comments: [commentSchema],
+  sharedFrom: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Post'
+  },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 })
 
 export default mongoose.model('Post', postSchema)
-

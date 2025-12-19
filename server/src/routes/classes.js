@@ -111,6 +111,7 @@ router.post('/:id/enroll', authenticate, async (req, res) => {
     
     classItem.enrolled.push({ user: req.user._id })
     await classItem.save()
+    await classItem.populate('enrolled.user', 'name avatar')
     
     // Create notification
     await Notification.create({
@@ -138,33 +139,36 @@ router.delete('/:id/enroll', authenticate, async (req, res) => {
     
     // Remove from enrolled
     classItem.enrolled = classItem.enrolled.filter(
-      e => e.user.toString() !== req.user._id.toString()
+      e => e.user && e.user.toString() !== req.user._id.toString()
     )
     
     // Remove from waitlist
     classItem.waitlist = classItem.waitlist.filter(
-      e => e.user.toString() !== req.user._id.toString()
+      e => e.user && e.user.toString() !== req.user._id.toString()
     )
     
     // Move first from waitlist to enrolled if there's space
     if (classItem.waitlist.length > 0 && classItem.enrolled.length < classItem.maxCapacity) {
       const nextUser = classItem.waitlist.shift()
-      classItem.enrolled.push({ user: nextUser.user })
-      
-      // Notify user from waitlist
-      await Notification.create({
-        user: nextUser.user,
-        type: 'class_reminder',
-        title: '¡Tienes un lugar!',
-        body: `Se liberó un espacio en ${classItem.name}. Ya estás inscrito.`,
-        icon: '🎉',
-        priority: 'high'
-      })
+      if (nextUser && nextUser.user) {
+        classItem.enrolled.push({ user: nextUser.user })
+        
+        // Notify user from waitlist
+        await Notification.create({
+          user: nextUser.user,
+          type: 'class_reminder',
+          title: '¡Tienes un lugar!',
+          body: `Se liberó un espacio en ${classItem.name}. Ya estás inscrito.`,
+          icon: '🎉',
+          priority: 'high'
+        })
+      }
     }
     
     await classItem.save()
+    await classItem.populate('enrolled.user', 'name avatar')
     
-    res.json({ message: 'Inscripción cancelada' })
+    res.json({ message: 'Inscripción cancelada', classItem })
   } catch (error) {
     res.status(500).json({ message: 'Error al cancelar inscripción', error: error.message })
   }
