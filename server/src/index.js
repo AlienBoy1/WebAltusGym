@@ -41,8 +41,15 @@ const allowedOrigins = [
   `http://${LOCAL_IP}:5173`,
   `http://${LOCAL_IP}:5174`,
   process.env.CLIENT_URL,
-  process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null
+  process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
+  'https://webaltusgym1.vercel.app',
+  'https://*.vercel.app'
 ].filter(Boolean)
+
+// Log allowed origins in production
+if (process.env.NODE_ENV === 'production') {
+  console.log('🌐 Allowed CORS origins:', allowedOrigins)
+}
 
 const io = new Server(server, {
   cors: {
@@ -58,7 +65,38 @@ const PORT = process.env.PORT || 3001
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://alien:alien@cluster0.xr01zqx.mongodb.net/altusGym?retryWrites=true&w=majority&appName=Cluster0'
 
 // Middleware
-app.use(cors({ origin: allowedOrigins, credentials: true }))
+app.use(cors({ 
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true)
+    
+    // Check if origin is in allowed list
+    if (allowedOrigins.some(allowed => {
+      if (allowed.includes('*')) {
+        const pattern = allowed.replace('*', '.*')
+        return new RegExp(pattern).test(origin)
+      }
+      return origin === allowed
+    })) {
+      callback(null, true)
+    } else {
+      console.log('❌ CORS blocked origin:', origin)
+      callback(new Error('Not allowed by CORS'))
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}))
+
+// Log all requests in production
+if (process.env.NODE_ENV === 'production') {
+  app.use((req, res, next) => {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.path} - Origin: ${req.headers.origin || 'none'}`)
+    next()
+  })
+}
+
 app.use(express.json({ limit: '10mb' })) // Increase limit for image uploads
 app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 
@@ -151,14 +189,25 @@ io.on('connection', (socket) => {
 mongoose.connect(MONGODB_URI)
   .then(() => {
     console.log('✅ Conectado a MongoDB Atlas - altusGym')
+    console.log('🌍 Environment:', process.env.NODE_ENV || 'development')
+    console.log('🔐 JWT Secret configured:', !!process.env.JWT_SECRET)
+    console.log('🌐 Client URL:', process.env.CLIENT_URL || 'not set')
+    
     server.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Servidor corriendo en puerto ${PORT}`)
-      console.log(`📱 Accede desde tu celular en: http://${LOCAL_IP}:5173`)
-      console.log(`💻 Accede localmente en: http://localhost:5173`)
-      console.log(`🔌 API disponible en: http://${LOCAL_IP}:${PORT}/api`)
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`📱 Accede desde tu celular en: http://${LOCAL_IP}:5173`)
+        console.log(`💻 Accede localmente en: http://localhost:5173`)
+        console.log(`🔌 API disponible en: http://${LOCAL_IP}:${PORT}/api`)
+      } else {
+        console.log(`🌐 Servidor en producción`)
+        console.log(`🔌 API disponible en: https://altus-gym-server.onrender.com/api`)
+      }
+      console.log('✅ Servidor listo para recibir peticiones')
     })
   })
   .catch((error) => {
     console.error('❌ Error de conexión a MongoDB:', error.message)
+    console.error('Error details:', error)
     process.exit(1)
   })

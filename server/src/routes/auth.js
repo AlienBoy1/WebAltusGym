@@ -336,22 +336,33 @@ router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body
     
-    console.log('Login attempt:', email)
+    console.log('🔐 Login attempt:', email, 'from origin:', req.headers.origin)
     
-    // Find user
-    const user = await User.findOne({ email })
+    if (!email || !password) {
+      console.log('❌ Missing credentials')
+      return res.status(400).json({ message: 'Email y contraseña son requeridos' })
+    }
+    
+    // Find user (case insensitive)
+    const user = await User.findOne({ email: email.toLowerCase().trim() })
     if (!user) {
-      console.log('User not found:', email)
+      console.log('❌ User not found:', email.toLowerCase().trim())
       return res.status(401).json({ message: 'Credenciales inválidas' })
     }
     
-    console.log('User found:', user.email, 'Has password:', !!user.password)
+    console.log('✅ User found:', user.email, 'Has password:', !!user.password)
     
     // Check password
+    if (!user.password) {
+      console.log('❌ User has no password set')
+      return res.status(401).json({ message: 'Credenciales inválidas' })
+    }
+    
     const isMatch = await bcrypt.compare(password, user.password)
-    console.log('Password match:', isMatch)
+    console.log('🔑 Password match:', isMatch)
     
     if (!isMatch) {
+      console.log('❌ Password mismatch')
       return res.status(401).json({ message: 'Credenciales inválidas' })
     }
     
@@ -360,11 +371,14 @@ router.post('/login', async (req, res) => {
     await user.save()
     
     // Generate token
+    const jwtSecret = process.env.JWT_SECRET || 'altus_secret_key_2024'
     const token = jwt.sign(
       { userId: user._id, role: user.role },
-      process.env.JWT_SECRET || 'altus_secret_key_2024',
+      jwtSecret,
       { expiresIn: '30d' }
     )
+    
+    console.log('✅ Login successful for:', user.email)
     
     res.json({
       message: 'Login exitoso',
@@ -380,8 +394,12 @@ router.post('/login', async (req, res) => {
       }
     })
   } catch (error) {
-    console.error('Login error:', error)
-    res.status(500).json({ message: 'Error al iniciar sesión', error: error.message })
+    console.error('❌ Login error:', error)
+    console.error('Error stack:', error.stack)
+    res.status(500).json({ 
+      message: 'Error al iniciar sesión', 
+      error: process.env.NODE_ENV === 'production' ? 'Error interno del servidor' : error.message 
+    })
   }
 })
 
