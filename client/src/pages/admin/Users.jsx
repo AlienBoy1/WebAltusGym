@@ -1,21 +1,28 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FiSearch, FiEdit2, FiTrash2, FiPlus, FiX, FiUserPlus, FiCheck, FiMail, FiClock } from 'react-icons/fi'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import api from '../../utils/api'
 import toast from 'react-hot-toast'
+import AccessCodeModal from '../../components/AccessCodeModal'
 
 export default function AdminUsers() {
+  const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [users, setUsers] = useState([])
   const [registrationRequests, setRegistrationRequests] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadingRequests, setLoadingRequests] = useState(true)
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
-  const [activeTab, setActiveTab] = useState('users') // 'users' or 'requests'
+  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'users') // 'users' or 'requests'
   const [selectedUser, setSelectedUser] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
   const [showRegisterModal, setShowRegisterModal] = useState(false)
+  const [showAccessCodeModal, setShowAccessCodeModal] = useState(false)
+  const [generatedAccessCode, setGeneratedAccessCode] = useState('')
+  const [generatedUserName, setGeneratedUserName] = useState('')
   const [selectedRequest, setSelectedRequest] = useState(null)
   const [newUser, setNewUser] = useState({ name: '', email: '', password: '', plan: 'basic' })
   const [registerForm, setRegisterForm] = useState({
@@ -35,6 +42,14 @@ export default function AdminUsers() {
       fetchRegistrationRequests()
     }
   }, [filter, activeTab])
+
+  // Handle tab change from URL
+  useEffect(() => {
+    const tab = searchParams.get('tab')
+    if (tab === 'requests' || tab === 'users') {
+      setActiveTab(tab)
+    }
+  }, [searchParams])
   
   const fetchRegistrationRequests = async () => {
     try {
@@ -55,9 +70,11 @@ export default function AdminUsers() {
       if (filter !== 'all') params.append('status', filter)
       if (search) params.append('search', search)
       const { data } = await api.get(`/admin/users?${params.toString()}`)
-      setUsers(data.users || [])
+      setUsers(data?.users || data || [])
     } catch (error) {
-      toast.error('Error al cargar usuarios')
+      console.error('Error fetching users:', error)
+      toast.error(error.response?.data?.message || 'Error al cargar usuarios')
+      setUsers([])
     } finally {
       setLoading(false)
     }
@@ -126,8 +143,11 @@ export default function AdminUsers() {
         ...registerForm
       })
       
-      toast.success(`Usuario registrado. Código: ${data.accessCode}`, { duration: 8000 })
+      // Show access code modal instead of toast
+      setGeneratedAccessCode(data.accessCode)
+      setGeneratedUserName(`${registerForm.name} ${registerForm.lastName || ''}`.trim())
       setShowRegisterModal(false)
+      setShowAccessCodeModal(true)
       setSelectedRequest(null)
       setRegisterForm({
         name: '',
@@ -232,12 +252,18 @@ export default function AdminUsers() {
                       </div>
                     </div>
                     <button
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation()
                         setSelectedRequest(request)
                         setRegisterForm({
-                          ...registerForm,
                           name: request.userData?.name?.split(' ')[0] || '',
-                          lastName: request.userData?.name?.split(' ').slice(1).join(' ') || ''
+                          lastName: request.userData?.name?.split(' ').slice(1).join(' ') || '',
+                          age: request.userData?.age || '',
+                          weight: request.userData?.weight || '',
+                          height: request.userData?.height || '',
+                          phone: request.userData?.phone || '',
+                          membershipPlan: request.userData?.membershipPlan || 'basic',
+                          membershipDuration: request.userData?.membershipDuration?.toString() || '30'
                         })
                         setShowRegisterModal(true)
                       }}
@@ -341,6 +367,14 @@ export default function AdminUsers() {
         </div>
       )}
       
+      {/* Access Code Modal */}
+      <AccessCodeModal
+        isOpen={showAccessCodeModal}
+        onClose={() => setShowAccessCodeModal(false)}
+        accessCode={generatedAccessCode}
+        userName={generatedUserName}
+      />
+
       {/* Register User from Request Modal */}
       <AnimatePresence>
         {showRegisterModal && selectedRequest && (

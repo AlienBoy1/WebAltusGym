@@ -1,6 +1,7 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { FiBell, FiCheck, FiTrash2, FiCheckCircle } from 'react-icons/fi'
+import { FiBell, FiCheck, FiTrash2, FiCheckCircle, FiMessageCircle } from 'react-icons/fi'
+import { useNavigate } from 'react-router-dom'
 import { useNotificationStore } from '../../store/notificationStore'
 import { formatDistanceToNow } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -12,10 +13,15 @@ const typeIcons = {
   membership: '💳',
   admin: '📢',
   achievement: '🏆',
-  general: '🔔'
+  general: '🔔',
+  registration_request: '👤',
+  message: '💬',
+  follow_request: '👤'
 }
 
 export default function Notifications() {
+  const navigate = useNavigate()
+  const [showMessageDialog, setShowMessageDialog] = useState(null)
   const { 
     notifications, 
     unreadCount, 
@@ -33,6 +39,28 @@ export default function Notifications() {
   
   const handleMarkAsRead = async (id) => {
     await markAsRead(id)
+  }
+
+  const handleNotificationClick = async (notification) => {
+    // Handle registration request notification
+    if (notification.type === 'registration_request' && notification.metadata?.redirectTo) {
+      navigate(notification.metadata.redirectTo)
+      if (!notification.read) {
+        await markAsRead(notification._id)
+      }
+      return
+    }
+
+    // Handle message notification
+    if (notification.type === 'message') {
+      setShowMessageDialog(notification)
+      return
+    }
+
+    // Default: just mark as read if not read
+    if (!notification.read) {
+      await markAsRead(notification._id)
+    }
   }
   
   return (
@@ -84,7 +112,8 @@ export default function Notifications() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, x: -100 }}
                 transition={{ delay: i * 0.05 }}
-                className={`card flex gap-4 ${!notification.read ? 'border-l-4 border-l-primary-500' : 'opacity-70'}`}
+                className={`card flex gap-4 cursor-pointer hover:bg-dark-200 transition-colors ${!notification.read ? 'border-l-4 border-l-primary-500' : 'opacity-70'}`}
+                onClick={() => handleNotificationClick(notification)}
               >
                 <div className="text-2xl">
                   {notification.icon || typeIcons[notification.type] || '🔔'}
@@ -101,7 +130,7 @@ export default function Notifications() {
                   </div>
                   <p className="text-gray-400 text-sm mt-1">{notification.body}</p>
                   
-                  <div className="flex gap-3 mt-3">
+                  <div className="flex gap-3 mt-3" onClick={(e) => e.stopPropagation()}>
                     {!notification.read && (
                       <button 
                         onClick={() => handleMarkAsRead(notification._id)}
@@ -123,6 +152,47 @@ export default function Notifications() {
           </AnimatePresence>
         </div>
       )}
+
+      {/* Message Dialog */}
+      <AnimatePresence>
+        {showMessageDialog && (
+          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="card max-w-md w-full"
+            >
+              <h3 className="font-display text-xl mb-4">Nuevo Mensaje</h3>
+              <p className="text-gray-400 mb-6">{showMessageDialog.body}</p>
+              <div className="flex gap-3">
+                <button
+                  onClick={async () => {
+                    if (!showMessageDialog.read) {
+                      await markAsRead(showMessageDialog._id)
+                    }
+                    setShowMessageDialog(null)
+                    navigate('/chat')
+                  }}
+                  className="btn-primary flex-1 flex items-center justify-center gap-2"
+                >
+                  <FiMessageCircle size={18} />
+                  Abrir Chat
+                </button>
+                <button
+                  onClick={async () => {
+                    await markAsRead(showMessageDialog._id)
+                    setShowMessageDialog(null)
+                  }}
+                  className="btn-secondary flex-1"
+                >
+                  Marcar como Leída
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

@@ -40,16 +40,40 @@ router.get('/dashboard', async (req, res) => {
 // Get all users
 router.get('/users', async (req, res) => {
   try {
-    const { status, plan, search, page = 1, limit = 20 } = req.query
+    const { status, plan, search, page = 1, limit = 50 } = req.query
     const filter = {}
-    if (status && status !== 'all') filter['membership.status'] = status
-    if (plan) filter['membership.plan'] = plan
-    if (search) filter.$or = [{ name: { $regex: search, $options: 'i' } }, { email: { $regex: search, $options: 'i' } }]
-    const users = await User.find(filter).select('-password -twoFactorSecret').sort({ createdAt: -1 }).skip((page - 1) * limit).limit(parseInt(limit))
+    
+    if (status && status !== 'all') {
+      filter['membership.status'] = status
+    }
+    if (plan && plan !== 'all') {
+      filter['membership.plan'] = plan
+    }
+    if (search && search.trim() !== '') {
+      filter.$or = [
+        { name: { $regex: search.trim(), $options: 'i' } }, 
+        { email: { $regex: search.trim(), $options: 'i' } }
+      ]
+    }
+    
+    const users = await User.find(filter)
+      .select('-password -twoFactorSecret')
+      .sort({ createdAt: -1 })
+      .skip((parseInt(page) - 1) * parseInt(limit))
+      .limit(parseInt(limit))
+      .lean()
+    
     const total = await User.countDocuments(filter)
-    res.json({ users, total, page: parseInt(page), pages: Math.ceil(total / limit) })
+    
+    res.json({ 
+      users: users || [], 
+      total, 
+      page: parseInt(page), 
+      pages: Math.ceil(total / parseInt(limit)) 
+    })
   } catch (error) {
-    res.status(500).json({ message: 'Error', error: error.message })
+    console.error('Error fetching users:', error)
+    res.status(500).json({ message: 'Error al obtener usuarios', error: error.message })
   }
 })
 

@@ -163,11 +163,44 @@ io.on('connection', (socket) => {
     // Save message to DB
     try {
       const Message = (await import('./models/Message.js')).default
+      const User = (await import('./models/User.js')).default
+      const Notification = (await import('./models/Notification.js')).default
+      
+      // Check if both users follow each other
+      const currentUser = await User.findById(from)
+      const targetUser = await User.findById(to)
+      
+      if (!targetUser) {
+        socket.emit('messageSent', { success: false, error: 'Usuario no encontrado' })
+        return
+      }
+      
+      // Check if current user follows target user
+      const currentFollowsTarget = currentUser.social?.following?.some(
+        id => id.toString() === to
+      )
+      
+      // Check if target user follows current user
+      const targetFollowsCurrent = targetUser.social?.followers?.some(
+        id => id.toString() === from
+      )
+      
+      // Both must follow each other to send messages
+      if (!currentFollowsTarget || !targetFollowsCurrent) {
+        socket.emit('messageSent', { 
+          success: false, 
+          error: 'No puedes comunicarte con un usuario que aún no sigues ni te sigue. Completen su follow para poder intercambiar mensajes en Altus Gym' 
+        })
+        return
+      }
+      
       const newMsg = new Message({
         from: from,
         to: to,
         content: message,
-        read: false
+        read: false,
+        delivered: !!recipientSocket,
+        deliveredAt: recipientSocket ? new Date() : null
       })
       await newMsg.save()
       
@@ -177,15 +210,58 @@ io.on('connection', (socket) => {
           from,
           fromName,
           message,
+          messageId: newMsg._id,
           timestamp: new Date()
         })
       }
       
-      // Confirm to sender
-      socket.emit('messageSent', { success: true, messageId: newMsg._id })
+      // Create notification for recipient
+      await Notification.create({
+        user: to,
+        type: 'message',
+        title: 'Nuevo mensaje',
+        body: `${fromName}: ${message.substring(0, 50)}${message.length > 50 ? '...' : ''}`,
+        icon: '💬',
+        relatedUser: from,
+        priority: 'normal',
+        metadata: {
+          messageId: newMsg._id,
+          fromUserId: from,
+          fromUserName: fromName
+        }
+      })
+      
+      // Confirm to sender with delivery status
+      socket.emit('messageSent', { 
+        success: true, 
+        messageId: newMsg._id,
+        delivered: !!recipientSocket
+      })
     } catch (error) {
       console.error('Error saving message:', error)
-      socket.emit('messageSent', { success: false })
+      socket.emit('messageSent', { success: false, error: error.message })
+    }
+  })
+  
+  // Mark message as read
+  socket.on('markMessageRead', async (data) => {
+    try {
+      const { messageId } = data
+      const Message = (await import('./models/Message.js')).default
+      await Message.findByIdAndUpdate(messageId, { 
+        read: true, 
+        readAt: new Date() 
+      })
+    } catch (error) {
+      console.error('Error marking message as read:', error)
+    }
+  })
+  
+  // Stop typing
+  socket.on('stopTyping', (data) => {
+    const recipientSocket = onlineUsers.get(data.to)
+    if (recipientSocket) {
+      io.to(recipientSocket).emit('userStoppedTyping', { from: data.from })
     }
   })
   
@@ -194,6 +270,64 @@ io.on('connection', (socket) => {
     const recipientSocket = onlineUsers.get(data.to)
     if (recipientSocket) {
       io.to(recipientSocket).emit('userTyping', { from: data.from })
+    }
+  })
+  
+  // Group message (admin only)
+  socket.on('sendGroupMessage', async (data) => {
+    try {
+      const GroupMessage = (await import('./models/GroupMessage.js')).default
+      const GroupChat = (await import('./models/GroupChat.js')).default
+      const User = (await import('./models/User.js')).default
+      
+      const { groupId, content, from } = data
+      
+      // Verify user is member of group
+      const group = await GroupChat.findById(groupId)
+      if (!group) {
+        socket.emit('groupMessageSent', { success: false, error: 'Grupo no encontrado' })
+        return
+      }
+      
+      const isMember = group.members.some(m => m.user.toString() === from)
+      if (!isMember) {
+        socket.emit('groupMessageSent', { success: false, error: 'No eres miembro de este grupo' })
+        return
+      }
+      
+      const message = new GroupMessage({
+        group: groupId,
+        from: from,
+        content: content,
+        deliveredTo: [{ user: from, deliveredAt: new Date() }]
+      })
+      
+      await message.save()
+      await message.populate('from', 'name avatar')
+      
+      // Send to all group members
+      group.members.forEach(member => {
+        const memberSocket = onlineUsers.get(member.user.toString())
+        if (memberSocket) {
+          io.to(memberSocket).emit('newGroupMessage', {
+            groupId,
+            from: from,
+            fromName: message.from.name,
+            message: content,
+            messageId: message._id,
+            timestamp: new Date()
+          })
+        }
+      })
+      
+      socket.emit('groupMessageSent', { 
+        success: true, 
+        messageId: message._id,
+        delivered: true
+      })
+    } catch (error) {
+      console.error('Error sending group message:', error)
+      socket.emit('groupMessageSent', { success: false, error: error.message })
     }
   })
   

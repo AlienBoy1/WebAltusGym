@@ -243,8 +243,17 @@ export default function Login() {
       <CodeAccessModal
         isOpen={showCodeAccess}
         onClose={() => setShowCodeAccess(false)}
-        onSuccess={() => {
+        onSuccess={async () => {
           setShowCodeAccess(false)
+          // Refresh user data
+          const { useAuthStore } = await import('../store/authStore')
+          const authStore = useAuthStore.getState()
+          await authStore.refreshUser()
+          // Check if first login to show welcome message
+          const user = authStore.user
+          if (user && !user.onboardingCompleted) {
+            toast.success('¡Bienvenido a Altus Gym!', { duration: 5000 })
+          }
           navigate('/dashboard')
         }}
       />

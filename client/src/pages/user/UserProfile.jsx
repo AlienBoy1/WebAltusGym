@@ -20,7 +20,8 @@ export default function UserProfile() {
     isFollowing: false,
     hasPendingRequest: false,
     followersCount: 0,
-    followingCount: 0
+    followingCount: 0,
+    isFollowingCurrentUser: false
   })
   const [posts, setPosts] = useState([])
   const [showPosts, setShowPosts] = useState(false)
@@ -50,11 +51,18 @@ export default function UserProfile() {
     if (!currentUser?._id || !id || currentUser._id === id) return
     
     try {
-      const { data } = await api.get(`/social/${id}/follow-status`)
-      setFollowStatus(data)
+      const [followStatusData, userData] = await Promise.all([
+        api.get(`/social/${id}/follow-status`),
+        api.get(`/users/${id}`)
+      ])
+      
+      setFollowStatus({
+        ...followStatusData.data,
+        isFollowingCurrentUser: userData.data.isFollowingCurrentUser || false
+      })
       
       // If following, fetch posts
-      if (data.isFollowing) {
+      if (followStatusData.data.isFollowing) {
         fetchUserPosts()
       }
     } catch (error) {
@@ -206,6 +214,16 @@ export default function UserProfile() {
               >
                 <FiUserPlus size={18} />
                 Seguir
+              </button>
+            )}
+            {/* Show follow button if target user follows current user but current user hasn't followed back */}
+            {followStatus.isFollowingCurrentUser && !followStatus.isFollowing && !followStatus.hasPendingRequest && (
+              <button
+                onClick={handleFollow}
+                className="btn-secondary py-2 px-6 flex items-center gap-2"
+              >
+                <FiUserCheck size={18} />
+                Seguir también
               </button>
             )}
           </div>

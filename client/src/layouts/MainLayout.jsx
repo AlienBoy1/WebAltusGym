@@ -1,11 +1,12 @@
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FiHome, FiUsers, FiActivity, FiTrendingUp, FiUser, FiBell, FiSettings, FiCalendar, FiTarget, FiMessageCircle, FiLogOut, FiArrowLeft, FiSearch, FiX } from 'react-icons/fi'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuthStore } from '../store/authStore'
 import { useNotificationStore } from '../store/notificationStore'
 import NotificationPrompt from '../components/NotificationPrompt'
-import { initSocket, disconnectSocket } from '../utils/socket'
+import MessageNotificationModal from '../components/MessageNotificationModal'
+import { initSocket, disconnectSocket, getSocket, showNotification, requestNotificationPermission } from '../utils/socket'
 import api from '../utils/api'
 import { Link } from 'react-router-dom'
 
@@ -29,22 +30,86 @@ export default function MainLayout() {
   const location = useLocation()
   const navigate = useNavigate()
   const { user, logout } = useAuthStore()
-  const { unreadCount, fetchNotifications } = useNotificationStore()
+  const { unreadCount, fetchNotifications, addNotification } = useNotificationStore()
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
   const [showSearch, setShowSearch] = useState(false)
   const [searching, setSearching] = useState(false)
+  const [messageNotification, setMessageNotification] = useState(null)
+  const isInChatRef = useRef(false)
   
   const isDashboard = location.pathname === '/dashboard'
   const canGoBack = !isDashboard && location.pathname !== '/'
+  
+  useEffect(() => {
+    isInChatRef.current = location.pathname === '/chat'
+  }, [location.pathname])
   
   useEffect(() => { 
     fetchNotifications()
     if (user?._id) {
       initSocket(user._id)
+      requestNotificationPermission()
     }
     return () => disconnectSocket()
   }, [user])
+  
+  // Listen for new messages in real-time
+  useEffect(() => {
+    const socket = getSocket()
+    if (!socket || !user?._id) return
+    
+    const handleNewMessage = (data) => {
+      // Don't show notification if user is in chat and viewing that conversation
+      if (isInChatRef.current && data.from) {
+        // Check if viewing this specific conversation
+        const currentPath = window.location.pathname
+        if (currentPath.includes('/chat')) {
+          return // User is in chat, don't show modal
+        }
+      }
+      
+      // Create notification object
+      const notification = {
+        _id: `msg-${Date.now()}`,
+        type: 'message',
+        body: data.message,
+        message: data.message,
+        metadata: {
+          fromId: data.from,
+          fromName: data.fromName
+        },
+        read: false,
+        createdAt: new Date()
+      }
+      
+      // Show browser notification
+      showNotification(
+        `💬 ${data.fromName}`,
+        data.message,
+        {
+          tag: `msg-${data.from}`,
+          onClick: () => {
+            window.focus()
+            navigate('/chat', { state: { userId: data.from } })
+          }
+        }
+      )
+      
+      // Show interactive modal
+      setMessageNotification(notification)
+      
+      // Add to notification store
+      addNotification(notification)
+      fetchNotifications() // Refresh count
+    }
+    
+    socket.on('newMessage', handleNewMessage)
+    
+    return () => {
+      socket.off('newMessage', handleNewMessage)
+    }
+  }, [user, navigate, fetchNotifications, addNotification])
   
   useEffect(() => {
     if (searchQuery.trim()) {
@@ -66,9 +131,10 @@ export default function MainLayout() {
     try {
       const encodedQuery = encodeURIComponent(searchQuery.trim())
       const { data } = await api.get(`/users/search?q=${encodedQuery}`)
-      setSearchResults(data || [])
+      setSearchResults(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Error searching users:', error)
+      console.error('Error details:', error.response?.data)
       setSearchResults([])
     } finally {
       setSearching(false)
@@ -311,6 +377,18 @@ export default function MainLayout() {
       
       {/* Notification Prompt */}
       <NotificationPrompt />
+      
+      {/* Message Notification Modal */}
+      {messageNotification && (
+        <MessageNotificationModal
+          notification={messageNotification}
+          onClose={() => setMessageNotification(null)}
+          onMarkAsRead={async () => {
+            // Already handled in modal
+            setMessageNotification(null)
+          }}
+        />
+      )}
     </div>
   )
 }

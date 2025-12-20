@@ -4,6 +4,7 @@ import { FiBell, FiMoon, FiSun, FiVolume2, FiEye, FiActivity, FiSave, FiChevronR
 import { useAuthStore } from '../../store/authStore'
 import api from '../../utils/api'
 import toast from 'react-hot-toast'
+import { setLanguage, t } from '../../utils/i18n'
 
 const COLOR_THEMES = [
   { id: 'orange', name: 'Naranja', primary: '#FF6B35', accent: '#00F5FF' },
@@ -102,7 +103,11 @@ export default function UserSettings() {
   
   useEffect(() => {
     applySettings(settings)
-  }, [settings.theme, settings.colorTheme, settings.accessibility?.fontSize])
+    // Apply language
+    if (settings.language) {
+      setLanguage(settings.language)
+    }
+  }, [settings.theme, settings.colorTheme, settings.accessibility?.fontSize, settings.language])
   
   const updateSetting = (category, key, value) => {
     setSettings(prev => ({ ...prev, [category]: { ...prev[category], [key]: value } }))
@@ -276,9 +281,20 @@ export default function UserSettings() {
                   </div>
                   
                   <div className="py-3 border-t border-white/5">
-                    <div className="font-medium mb-3">Idioma</div>
-                    <select value={settings.language || 'es'} onChange={(e) => setSettings(prev => ({ ...prev, language: e.target.value }))} className="input-field">
-                      <option value="es">Español</option><option value="en">English</option><option value="pt">Português</option>
+                    <div className="font-medium mb-3">{t('settings.language')}</div>
+                    <select 
+                      value={settings.language || 'es'} 
+                      onChange={(e) => {
+                        const newLang = e.target.value
+                        setSettings(prev => ({ ...prev, language: newLang }))
+                        setLanguage(newLang)
+                        toast.success('Idioma actualizado')
+                      }} 
+                      className="input-field"
+                    >
+                      <option value="es">Español</option>
+                      <option value="en">English</option>
+                      <option value="pt">Português</option>
                     </select>
                   </div>
                 </div>

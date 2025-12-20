@@ -494,11 +494,18 @@ router.get('/:id/follow-status', authenticate, async (req, res) => {
       req => req.user.toString() === req.user._id.toString()
     )
     
+    // Check if target user follows current user
+    const targetFollowsCurrent = currentUser.social?.followers?.some(
+      f => f.toString() === targetUserId
+    )
+    
     res.json({
       isFollowing,
       hasPendingRequest,
+      targetFollowsCurrent,
       followersCount: targetUser.social?.followers?.length || 0,
-      followingCount: targetUser.social?.following?.length || 0
+      followingCount: targetUser.social?.following?.length || 0,
+      followers: targetUser.social?.followers || []
     })
   } catch (error) {
     res.status(500).json({ message: 'Error al obtener estado', error: error.message })

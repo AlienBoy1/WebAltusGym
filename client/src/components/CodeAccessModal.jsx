@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FiX, FiKey, FiMail, FiLock, FiCheck } from 'react-icons/fi'
 import api from '../utils/api'
+import { useAuthStore } from '../store/authStore'
 import toast from 'react-hot-toast'
 
 export default function CodeAccessModal({ isOpen, onClose, onSuccess }) {
@@ -82,10 +83,18 @@ export default function CodeAccessModal({ isOpen, onClose, onSuccess }) {
       // Store token and user
       localStorage.setItem('token', data.token)
       
+      // Update auth store
+      useAuthStore.getState().set({ 
+        user: data.user, 
+        token: data.token, 
+        isAuthenticated: true 
+      })
+      
       toast.success('¡Bienvenido a Altus Gym! Tu membresía está lista.', {
         duration: 4000
       })
       
+      // Call onSuccess which should handle navigation
       onSuccess()
     } catch (error) {
       toast.error(error.response?.data?.message || 'Error al completar registro')

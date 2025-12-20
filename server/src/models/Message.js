@@ -18,6 +18,16 @@ const messageSchema = new mongoose.Schema({
   read: {
     type: Boolean,
     default: false
+  },
+  readAt: {
+    type: Date
+  },
+  delivered: {
+    type: Boolean,
+    default: false
+  },
+  deliveredAt: {
+    type: Date
   }
 }, { timestamps: true })
 

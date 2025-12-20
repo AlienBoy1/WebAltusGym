@@ -58,11 +58,18 @@ git push -u origin main
 
 1. Conectar repositorio de GitHub
 2. Configurar:
-   - **Root Directory**: `client`
-   - **Build Command**: `npm run build`
+   - **Root Directory**: `client` (IMPORTANTE: Debe estar configurado)
+   - **Build Command**: `npm run build` (o dejar vacío, el vercel.json lo maneja)
    - **Output Directory**: `dist`
+   - **Install Command**: `npm install` (o dejar vacío)
+   - **Framework Preset**: Vite
 3. Agregar variable de entorno `VITE_API_URL`
 4. Deploy
+
+**NOTA**: Si el deploy falla, verifica que:
+- El Root Directory esté configurado como `client`
+- El archivo `vercel.json` en la raíz tenga la configuración correcta
+- Las dependencias se instalen correctamente
 
 ## Verificación Post-Deploy
 

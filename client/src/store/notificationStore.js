@@ -61,6 +61,14 @@ export const useNotificationStore = create((set, get) => ({
     }
   },
   
+  addNotification: (notification) => {
+    const { notifications } = get()
+    set({
+      notifications: [notification, ...notifications].slice(0, 100), // Keep last 100
+      unreadCount: get().unreadCount + 1
+    })
+  },
+  
   clearRead: async () => {
     try {
       await api.delete('/notifications/clear/read')

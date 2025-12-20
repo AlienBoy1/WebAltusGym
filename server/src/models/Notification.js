@@ -8,7 +8,7 @@ const notificationSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['welcome', 'general', 'workout', 'social', 'membership', 'admin', 'achievement', 'follow_request', 'follow_accepted', 'challenge_complete', 'badge_unlocked', 'level_up', 'challenge_invite', 'class_reminder', 'class_cancelled'],
+    enum: ['welcome', 'general', 'workout', 'social', 'membership', 'admin', 'achievement', 'follow_request', 'follow_accepted', 'challenge_complete', 'badge_unlocked', 'level_up', 'challenge_invite', 'class_reminder', 'class_cancelled', 'registration_request', 'message'],
     default: 'general'
   },
   relatedUser: {
@@ -16,6 +16,9 @@ const notificationSchema = new mongoose.Schema({
     ref: 'User'
   },
   relatedData: {
+    type: mongoose.Schema.Types.Mixed
+  },
+  metadata: {
     type: mongoose.Schema.Types.Mixed
   },
   title: {

@@ -55,6 +55,40 @@ export default defineConfig({
       }
     })
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          // Vendor chunks
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
+              return 'react-vendor'
+            }
+            if (id.includes('framer-motion') || id.includes('react-icons')) {
+              return 'ui-vendor'
+            }
+            if (id.includes('recharts')) {
+              return 'chart-vendor'
+            }
+            if (id.includes('socket.io')) {
+              return 'socket-vendor'
+            }
+            // Other node_modules
+            return 'vendor'
+          }
+        },
+        chunkSizeWarningLimit: 600
+      }
+    },
+    chunkSizeWarningLimit: 600,
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true,
+        drop_debugger: true
+      }
+    }
+  },
   server: {
     host: '0.0.0.0', // Escuchar en todas las interfaces
     port: 5173,

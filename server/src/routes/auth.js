@@ -45,6 +45,26 @@ router.post('/request-access', async (req, res) => {
     
     await request.save()
     
+    // Notify all admins about new registration request
+    const admins = await User.find({ role: 'admin' }).select('_id')
+    const Notification = (await import('../models/Notification.js')).default
+    
+    for (const admin of admins) {
+      await Notification.create({
+        user: admin._id,
+        type: 'registration_request',
+        title: 'Nueva Solicitud de Registro',
+        body: `Nueva solicitud de registro de ${email.toLowerCase()}`,
+        icon: '👤',
+        priority: 'high',
+        metadata: {
+          requestId: request._id,
+          email: email.toLowerCase(),
+          redirectTo: '/admin/users?tab=requests'
+        }
+      })
+    }
+    
     res.status(201).json({
       message: 'Solicitud enviada exitosamente',
       requestId: request._id
@@ -82,12 +102,38 @@ router.post('/complete-registration', async (req, res) => {
       return res.status(404).json({ message: 'Solicitud no encontrada o no aprobada' })
     }
     
-    // Check access code
-    const code = await AccessCode.findOne({
+    // Check access code - try multiple methods
+    let code = await AccessCode.findOne({
       email: email.toLowerCase(),
-      code: accessCode.toUpperCase(),
+      code: accessCode.toUpperCase().trim(),
       used: false
     })
+    
+    // If not found, try to find by registration request
+    if (!code && request.accessCode) {
+      if (request.accessCode.toUpperCase().trim() === accessCode.toUpperCase().trim()) {
+        // Code matches the one stored in request
+        // Try to find existing code document
+        code = await AccessCode.findOne({
+          registrationRequest: request._id,
+          used: false
+        })
+        
+        // If still not found, the code in request is valid but no document exists
+        // This can happen if the code was created before the AccessCode model was used
+        if (!code) {
+          // Create the code document now
+          code = new AccessCode({
+            code: request.accessCode,
+            email: request.email,
+            registrationRequest: request._id,
+            createdBy: request.approvedBy || request._id,
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+          })
+          await code.save()
+        }
+      }
+    }
     
     if (!code) {
       request.accessCodeAttempts = (request.accessCodeAttempts || 0) + 1
@@ -108,7 +154,7 @@ router.post('/complete-registration', async (req, res) => {
     }
     
     // Check if code is expired
-    if (new Date() > code.expiresAt) {
+    if (code.expiresAt && new Date() > new Date(code.expiresAt)) {
       return res.status(400).json({ message: 'El código de acceso ha expirado' })
     }
     
@@ -215,11 +261,26 @@ router.post('/verify-code', async (req, res) => {
       return res.status(404).json({ message: 'Solicitud no encontrada o no aprobada' })
     }
     
-    const code = await AccessCode.findOne({
+    // Try to find code by email and code
+    let code = await AccessCode.findOne({
       email: email.toLowerCase(),
-      code: accessCode.toUpperCase(),
+      code: accessCode.toUpperCase().trim(),
       used: false
     })
+    
+    // If not found, try to find by registration request
+    if (!code && request.accessCode) {
+      if (request.accessCode.toUpperCase().trim() === accessCode.toUpperCase().trim()) {
+        // Code matches the one stored in request, create a temporary code object
+        code = {
+          code: request.accessCode,
+          email: request.email,
+          registrationRequest: request._id,
+          used: false,
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days from now
+        }
+      }
+    }
     
     if (!code) {
       request.accessCodeAttempts = (request.accessCodeAttempts || 0) + 1
@@ -241,7 +302,8 @@ router.post('/verify-code', async (req, res) => {
       })
     }
     
-    if (new Date() > code.expiresAt) {
+    // Check expiration only if code is a real document
+    if (code.expiresAt && new Date() > new Date(code.expiresAt)) {
       return res.status(400).json({ message: 'El código de acceso ha expirado' })
     }
     
