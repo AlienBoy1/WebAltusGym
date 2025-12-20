@@ -110,10 +110,8 @@ app.use((req, res, next) => {
 // Make io accessible to routes
 app.set('io', io)
 
-// Routes
+// Routes with /api prefix (primary)
 app.use('/api/auth', authRoutes)
-// Also support /auth for backwards compatibility (in case frontend doesn't use /api prefix)
-app.use('/auth', authRoutes)
 app.use('/api/users', userRoutes)
 app.use('/api/workouts', workoutRoutes)
 app.use('/api/social', socialRoutes)
@@ -123,8 +121,23 @@ app.use('/api/chat', chatRoutes)
 app.use('/api/classes', classRoutes)
 app.use('/api/challenges', challengeRoutes)
 
-// Health check
+// Routes without /api prefix (for compatibility)
+app.use('/auth', authRoutes)
+app.use('/users', userRoutes)
+app.use('/workouts', workoutRoutes)
+app.use('/social', socialRoutes)
+app.use('/admin', adminRoutes)
+app.use('/notifications', notificationRoutes)
+app.use('/chat', chatRoutes)
+app.use('/classes', classRoutes)
+app.use('/challenges', challengeRoutes)
+
+// Health check endpoints
 app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() })
+})
+
+app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
 })
 
