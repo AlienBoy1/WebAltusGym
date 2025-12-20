@@ -89,22 +89,31 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }))
 
-// Log all requests in production
-if (process.env.NODE_ENV === 'production') {
-  app.use((req, res, next) => {
-    console.log(`${new Date().toISOString()} - ${req.method} ${req.path} - Origin: ${req.headers.origin || 'none'}`)
-    next()
-  })
-}
-
+// Body parsing middleware (must be before routes)
 app.use(express.json({ limit: '10mb' })) // Increase limit for image uploads
 app.use(express.urlencoded({ extended: true, limit: '10mb' }))
+
+// Log all requests in production (after body parser so we can see the body)
+app.use((req, res, next) => {
+  if (process.env.NODE_ENV === 'production') {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.path} - Origin: ${req.headers.origin || 'none'}`)
+    if (req.path.includes('login')) {
+      console.log(`📥 Login request body keys:`, Object.keys(req.body || {}))
+      console.log(`📥 Login request body:`, JSON.stringify(req.body))
+      console.log(`📥 Email from body:`, req.body?.email)
+      console.log(`📥 Password present:`, !!req.body?.password)
+    }
+  }
+  next()
+})
 
 // Make io accessible to routes
 app.set('io', io)
 
 // Routes
 app.use('/api/auth', authRoutes)
+// Also support /auth for backwards compatibility (in case frontend doesn't use /api prefix)
+app.use('/auth', authRoutes)
 app.use('/api/users', userRoutes)
 app.use('/api/workouts', workoutRoutes)
 app.use('/api/social', socialRoutes)
